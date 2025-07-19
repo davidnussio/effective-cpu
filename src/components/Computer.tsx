@@ -73,10 +73,8 @@ class CPU {
   }
 
   requestInterrupt(interrupt) {
-    if (!this.interruptQueue.includes(interrupt)) {
-      this.interruptQueue.push(interrupt);
-      this.logMessage = `Richiesta di Interrupt ${InterruptNames[interrupt]} ricevuta.`;
-    }
+    this.interruptQueue.push(interrupt);
+    this.logMessage = `Richiesta di Interrupt ${InterruptNames[interrupt]} ricevuta.`;
   }
 
   tick() {
@@ -300,9 +298,7 @@ const Register = ({ name, value, isHex = false }) => (
   <div className="bg-gray-700 p-2 rounded-md text-center">
     <div className="text-xs text-cyan-400 font-mono">{name}</div>
     <div className="text-xl font-bold font-mono">
-      {isHex
-        ? `0x${value.toString(16).padStart(2, "0")}`
-        : String(value).padStart(2, "0")}
+      {isHex ? `0x${value.toString(16).padStart(2, "0")}` : value}
     </div>
   </div>
 );
@@ -335,7 +331,9 @@ const MemoryCell = ({ address, value, isPC, isSP }) => {
       <div className="text-xs text-gray-400">
         0x{address.toString(16).padStart(2, "0")}
       </div>
-      <div className="font-mono font-bold">{value}</div>
+      <div className="font-mono font-bold">{`0x${value
+        .toString(16)
+        .padStart(2, "0")}`}</div>
     </div>
   );
 };
@@ -389,6 +387,8 @@ export default function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [clockHz, setClockHz] = useState(4);
   const timerRef = useRef(null);
+  const [, updateState] = useState();
+  const forceUpdate = useCallback(() => updateState({}), []);
 
   const parsedProgram = useCallback(() => {
     const lines = [];
@@ -436,16 +436,9 @@ export default function App() {
   }, []);
 
   const tick = useCallback(() => {
-    setCpu((prevCpu) => {
-      const newCpu = new CPU();
-      newCpu.memory = new Uint8Array(prevCpu.memory);
-      newCpu.registers = { ...prevCpu.registers };
-      newCpu.halted = prevCpu.halted;
-      newCpu.interruptQueue = [...prevCpu.interruptQueue];
-      newCpu.tick();
-      return newCpu;
-    });
-  }, []);
+    cpu.tick();
+    forceUpdate();
+  }, [forceUpdate, cpu]);
 
   useEffect(() => {
     if (isRunning && !cpu.halted) {
@@ -464,15 +457,8 @@ export default function App() {
     setCpu(createAndLoadCPU());
   };
   const handleTriggerInterrupt = () => {
-    setCpu((prevCpu) => {
-      const newCpu = new CPU();
-      newCpu.memory = new Uint8Array(prevCpu.memory);
-      newCpu.registers = { ...prevCpu.registers };
-      newCpu.halted = prevCpu.halted;
-      newCpu.interruptQueue = [...prevCpu.interruptQueue];
-      newCpu.requestInterrupt(Interrupts.TIMER);
-      return newCpu;
-    });
+    cpu.requestInterrupt(Interrupts.TIMER);
+    forceUpdate();
   };
 
   const { registers, memory, logMessage } = cpu;
@@ -568,7 +554,7 @@ export default function App() {
                   key={i}
                   address={i}
                   value={memory[i]}
-                  isPC={i === registers.PC}
+                  isPC={i === registers.PC || i === registers.PC + 1}
                   isSP={i === registers.SP}
                 />
               ))}
